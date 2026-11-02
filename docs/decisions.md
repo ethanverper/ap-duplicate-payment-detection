@@ -35,3 +35,33 @@ One short entry per non-obvious choice.
   - Last file wins: silent overwrites of financial data.
   - A DynamoDB ledger of fingerprints: it would also catch the same content uploaded under another name, but it adds a table for a case this export can't produce.
 - **Consequences:** idempotent with no extra service. A legitimate correction is a deliberate step: remove the validated copy, then re-send.
+
+## ADR-005: One arithmetic rule for "same invoice paid too much" (HIGH confidence)
+- **Context:** two planted problems look different on the surface:
+  - the same invoice keyed twice with its number typed differently;
+  - an advance followed by the full amount.
+
+  Legitimate advance + final payments look almost the same as the second one.
+- **Decision:** normalize the invoice number (uppercase, no separators, no leading zeros), group the payments by entity, supplier and normalized number, and flag the invoice when **total paid > invoice amount** (by more than `detection.overpayment_tolerance`). The rule name says which pattern it was: retyped number, advance then full, or simply paid twice.
+- **Alternatives:** one hand-written rule per pattern. That means more code, and it is easy to break the legitimate advance case.
+- **Consequences:**
+  - a legitimate advance + final adds up exactly to the invoice and can never be flagged;
+  - the amount at risk is the actual excess paid, not a guess;
+  - HIGH confidence: the arithmetic proves money was overpaid.
+
+## ADR-006: "Same amount, new number" is MEDIUM confidence, within 7 days
+- **Context:** a resubmitted invoice has a new number, so nothing in the number gives it away. What gives it away is the same supplier, the same exact amount and close invoice dates. But monthly fees repeat an amount by design, and with hundreds of invoices two of them can match to the cent by chance.
+- **Decision:** pair invoices of the same entity and supplier with exactly the same amount, dated at most `detection.resubmission_window_days` (7) apart. Flag the later one as **MEDIUM**: an analyst looks before claiming the money.
+- **Evidence:** with a 31-day window the same rule also flags subscriptions and a chance match between two freight invoices. With 7 days it flags only the planted resubmissions (lesson 1).
+- **Consequences:** a resubmission sent more than 7 days later is missed. Widening the window trades missed duplicates for false alarms, and the setting makes that a business decision.
+
+## ADR-007: The detector is graded against an answer key it never sees
+- **Context:** "26 suspects" says nothing about whether they are the right 26.
+- **Decision:** the simulator writes `truth/planted_problems.csv` locally and never uploads it. `src/evaluation/grading.py` compares the suspects with it and reports:
+  - per kind of problem: recall, with the expected rule and confidence;
+  - overall: precision, plus the false alarms themselves.
+
+  The tests assert it.
+- **Consequences:**
+  - a change to a rule that adds false alarms or loses duplicates fails the build;
+  - the README reports precision and recall, not just a count.

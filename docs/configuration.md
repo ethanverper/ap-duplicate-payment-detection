@@ -2,17 +2,18 @@
 
 Everything you can change, where it lives, and what to do after changing it. Someone running the project for the first time should only need this page and the README.
 
-> Built level by level: this page grows with each level. Today it covers the data generator (level 1) and the file validator (level 2).
+> Built level by level: this page grows with each level. Today it covers the data generator (level 1), the file validator (level 2) and the duplicate detector and KPI job (level 3).
 
 ## 1. Prerequisites
 | Tool | Version | Why | Check |
 |---|---|---|---|
 | Python | ≥ 3.10 | Generator, tests, scripts | `python3 --version` |
+| Java | 17 (Spark 3.5's supported version) | Local Spark for the Glue job tests and `make kpis-local`. Without it those tests are skipped. | `java -version` |
 | Terraform | ≥ 1.6 (native arm64 on Apple Silicon) | Creates the AWS resources (level 4) | `terraform version` |
 | AWS CLI | v2 | Uploads and checks (level 4) | `aws sts get-caller-identity` |
 
 ```bash
-make install   # Python dependencies
+make install   # Python dependencies (boto3, pyyaml, pytest, ruff, moto, pyspark 3.5 ≈ 300 MB)
 ```
 
 ## 2. Configuration files at a glance
@@ -28,6 +29,9 @@ make install   # Python dependencies
 |---|---|---|
 | `project.name`, `project.region` | Prefix of every AWS resource; AWS region | Deploying under another name or region |
 | `reporting.mxn_per_usd` | Fixed rate used to report MXN amounts in USD | You want another rate (all KPIs are in USD) |
+| `detection.overpayment_tolerance` | Excess paid on one invoice below this (invoice currency) is rounding, not an overpayment | Rounding differences in your ERP are larger |
+| `detection.resubmission_window_days` | Max days between two same-amount invoices of a supplier to call the later one a resubmission (MEDIUM). Wider catches later resubmissions but adds false alarms (lesson 1). | Suppliers resend invoices later |
+| `kpis.on_time_alert_pct` | On-time % below which a supplier is highlighted | AP's target changes |
 | `simulation.seed` | Random seed: same seed, same files, same README numbers | You want a different but reproducible history |
 | `simulation.history_days`, `warm_up_days` | Days of files produced; how far back invoices start, so day 1 already has payments due | More or less history |
 | `simulation.invoices_per_day.<ENTITY>` | New invoices per business day | More or less volume |
@@ -74,6 +78,15 @@ The file-validator Lambda (`src/lambdas/file_validator/`) reads only environment
 
 If one is missing, the Lambda stops at start-up rather than judging files with a made-up default.
 
+The Glue job (`src/glue_jobs/daily_ap_kpis.py`) reads only its job arguments. Terraform will set them in level 4; locally, `scripts/kpis_local.py` builds the same list:
+
+| Job argument | Source |
+|---|---|
+| `--input_root`, `--output_root` | `s3://<bucket>` on AWS; `data/generated` and `data/lake-local` locally |
+| `--files_prefix` | `files.validated_prefix` on AWS (the Lambda's output); `files.landing_prefix` locally (no Lambda in between) |
+| `--overpayment_tolerance` | `detection.overpayment_tolerance` |
+| `--resubmission_window_days` | `detection.resubmission_window_days` |
+
 **What the Lambda decides for each file** (`docs/decisions.md`, ADR-002 to ADR-004):
 
 | Outcome | When | What happens |
@@ -88,12 +101,15 @@ If one is missing, the Lambda stops at start-up rather than judging files with a
 | `data/generated/landing/ap/entity=<E>/` | One ERP file per entity per business day (rows + control trailer) | `make generate` |
 | `data/generated/reference/` | `suppliers/suppliers.csv`, `entities/entities.csv` | `make generate` |
 | `data/generated/truth/planted_problems.csv` | The answer key: which payments are planted problems. Local only, never uploaded: the pipeline must find them on its own. | `make generate` |
+| `data/lake-local/` | The Glue job's output run locally: `curated/`, `quarantine/`, `gold/` | `make kpis-local` |
 
 ## 6. Running it, in order
 | Step | Command | What happens | Cost |
 |---|---|---|---|
-| 1 | `make test` | Unit tests, plus the file validator against simulated S3 and SNS (moto) | $0 |
+| 1 | `make test` | Unit tests, the file validator against simulated S3 and SNS (moto), and the Glue job on local Spark (~5 min) | $0 |
 | 2 | `make generate` | 90 days of ERP files, master data and the answer key in `data/generated/` | $0 |
+| 3 | `make kpis-local` | The Glue job on those files with a local Spark: duplicate suspects, payment KPIs, reconciliation | $0 |
+| 4 | `make grade` | Precision and recall of the duplicate detector against the answer key | $0 |
 
 ## 7. Common changes
 | I want to… | Edit | Then |
@@ -101,3 +117,4 @@ If one is missing, the Lambda stops at start-up rather than judging files with a
 | Plant more or fewer duplicates | `config/settings.yaml` → `simulation.incidents` | `make generate`, `make test` (some tests assert the configured counts) |
 | Add a supplier | `config/master_data.yaml` → `suppliers` | `make generate`, `make test` |
 | Change an entity's payment calendar | `config/settings.yaml` → `simulation.payment_weekdays` | `make generate` |
+| Catch resubmissions sent later | `config/settings.yaml` → `detection.resubmission_window_days` | `make kpis-local`, `make grade` (watch the false alarms) |
