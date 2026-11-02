@@ -42,7 +42,7 @@ All money is reported in USD at a fixed rate from `config/settings.yaml`, so tot
   - path: `landing/ap/entity=<ENTITY>/<ENTITY>_ap_<YYYYMMDD>.csv`;
   - each file holds the day's payments with the invoice they settle;
   - **the last line is a control trailer**: record count and total amount, the way bank and ERP files prove they arrived complete.
-- **Volume:** 90 days of history × 2 entities × ~40 payments a day ≈ **7,000 payments** from ~25 suppliers. Plus one "today" file per entity for the live demo.
+- **Volume:** 90 days of history × 2 entities × ~40 payments a day ≈ **6,300 payments** from 16 suppliers. Plus one "today" file per entity for the live demo.
 - **Sample record:**
 ```csv
 payment_id,entity,supplier_id,supplier_invoice_number,invoice_date,due_date,invoice_amount,currency,payment_terms,payment_date,paid_amount,payment_type
