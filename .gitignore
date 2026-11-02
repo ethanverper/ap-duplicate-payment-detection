@@ -10,3 +10,9 @@ infra/terraform/terraform.tfvars
 
 # Generated demo data (recreate with `make generate`)
 data/generated/
+data/lake-local/
+
+# Local Spark leftovers
+spark-warehouse/
+metastore_db/
+derby.log

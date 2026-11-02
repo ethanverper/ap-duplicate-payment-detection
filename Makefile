@@ -2,7 +2,7 @@ PROJECT ?= $(shell basename $(CURDIR))
 TF := terraform -chdir=infra/terraform
 PYTHON ?= python3
 
-.PHONY: help install test lint fmt generate deploy demo destroy leftovers cost
+.PHONY: help install test lint fmt generate kpis-local grade deploy demo destroy leftovers cost
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-10s %s\n", $$1, $$2}'
@@ -23,6 +23,12 @@ fmt: ## Format Python and Terraform
 
 generate: ## Simulate 90 days of ERP payment files + master data + answer key into data/generated (local, no AWS)
 	$(PYTHON) -m src.generators.history --out data/generated
+
+kpis-local: ## Run the Glue job (duplicates + KPIs) on data/generated with a local Spark, into data/lake-local (no AWS)
+	$(PYTHON) -m scripts.kpis_local --input data/generated --output data/lake-local
+
+grade: ## Grade the duplicate detector of the local run against the simulator's answer key
+	$(PYTHON) -m scripts.grade_detection --lake data/lake-local --truth data/generated/truth/planted_problems.csv
 
 deploy: ## Create the stack (read the cost estimate in docs/spec.md first)
 	$(TF) init -input=false
