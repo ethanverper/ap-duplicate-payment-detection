@@ -1,0 +1,179 @@
+# =============================================================================
+# config/master_data.yaml — the reference data an ERP would hold: entities, supplier categories,
+# suppliers and their payment terms.
+#
+# Who reads it: src/generators/reference.py (simulation) and, from level 3, the Glue job through
+# the reference CSVs that the generator exports.
+#
+# Payment terms use the usual AP notation:
+#   "NET 30"       pay within 30 days of the invoice date
+#   "2/10 NET 30"  2% discount if paid within 10 days, otherwise the full amount within 30
+# =============================================================================
+
+# Legal entities: the first level of every KPI hierarchy
+entities:
+  MX01:
+    name: Manufacturing Mexico (Monterrey and San Luis Potosí plants)
+    currency: MXN
+  US01:
+    name: Distribution USA
+    currency: USD
+
+# Supplier categories: the second level of the hierarchy
+categories:
+  DIRECT_MATERIALS: Parts that go into the product (the P1 suppliers)
+  LOGISTICS: Freight and warehousing
+  SERVICES: Maintenance, cleaning, professional services
+  IT_UTILITIES: Software, telecom, energy
+
+# Suppliers. Fields:
+#   name           display name
+#   category       one of the categories above
+#   entities       which entities it bills
+#   terms          payment terms (notation above)
+#   amount_usd     [min, max] invoice amount in USD; Mexico invoices are converted to MXN
+#   weight         how often it invoices, relative to the others in the same entity
+#   invoice_format how it numbers its invoices (Python format; {n} is its running number)
+#   recurring_fee  optional: a fixed monthly amount billed on the 1st (no random invoices)
+#   advances       true if its invoices may be settled with an advance plus a final payment
+suppliers:
+  # --- Direct materials: the four parts suppliers of manufacturing-scrap-and-stockout-alerts
+  SUP-VOLTEX:
+    name: Voltex Energy (batteries)
+    category: DIRECT_MATERIALS
+    entities: [MX01]
+    terms: 2/10 NET 30
+    amount_usd: [4000, 25000]
+    weight: 6
+    invoice_format: "VX-{n:05d}"
+  SUP-PRECISA:
+    name: Precisa Controls (controllers, sensors)
+    category: DIRECT_MATERIALS
+    entities: [MX01, US01]
+    terms: 2/10 NET 30
+    amount_usd: [6000, 40000]
+    weight: 6
+    invoice_format: "FAC-{n:04d}"
+  SUP-NORDCAB:
+    name: Nordcab Wiring (harnesses, cables, connectors)
+    category: DIRECT_MATERIALS
+    entities: [MX01]
+    terms: NET 45
+    amount_usd: [2000, 15000]
+    weight: 5
+    invoice_format: "NC{n:06d}"
+  SUP-ANDINA:
+    name: Andina Components (housings, seals, screws)
+    category: DIRECT_MATERIALS
+    entities: [MX01]
+    terms: NET 30
+    amount_usd: [1000, 9000]
+    weight: 5
+    invoice_format: "AND-{n:04d}"
+  SUP-METALCO:
+    name: Metalco Stampings
+    category: DIRECT_MATERIALS
+    entities: [MX01]
+    terms: NET 60
+    amount_usd: [3000, 20000]
+    weight: 4
+    invoice_format: "MTC/{n:05d}"
+
+  # --- Logistics
+  SUP-TRANSNORTE:
+    name: Transnorte Freight
+    category: LOGISTICS
+    entities: [MX01, US01]
+    terms: NET 15
+    amount_usd: [800, 6000]
+    weight: 7
+    invoice_format: "TN-{n:06d}"
+  SUP-GULFPORT:
+    name: Gulfport Warehousing
+    category: LOGISTICS
+    entities: [US01]
+    terms: 1/10 NET 30
+    amount_usd: [1500, 8000]
+    weight: 4
+    invoice_format: "GW{n:05d}"
+  SUP-RIOEXPRESS:
+    name: Rio Express Customs Brokerage
+    category: LOGISTICS
+    entities: [MX01, US01]
+    terms: NET 30
+    amount_usd: [300, 2500]
+    weight: 4
+    invoice_format: "RX-{n:05d}"
+
+  # --- Services
+  SUP-INDUSERV:
+    name: Induserv Maintenance
+    category: SERVICES
+    entities: [MX01]
+    terms: NET 30
+    amount_usd: [1500, 12000]
+    weight: 4
+    invoice_format: "IS-{n:04d}"
+    advances: true
+  SUP-CLEANPRO:
+    name: CleanPro Facility Services
+    category: SERVICES
+    entities: [MX01, US01]
+    terms: NET 30
+    amount_usd: [800, 3000]
+    weight: 3
+    invoice_format: "CP{n:05d}"
+  SUP-AUDITCO:
+    name: Auditco Professional Services
+    category: SERVICES
+    entities: [US01]
+    terms: NET 30
+    amount_usd: [5000, 30000]
+    weight: 2
+    invoice_format: "AC-{n:04d}"
+    advances: true
+  SUP-ROBOTEC:
+    name: Robotec Automation Projects
+    category: SERVICES
+    entities: [MX01, US01]
+    terms: 2/10 NET 45
+    amount_usd: [10000, 60000]
+    weight: 2
+    invoice_format: "RBT-{n:04d}"
+    advances: true
+
+  # --- IT and utilities
+  SUP-CLOUDOPS:
+    name: CloudOps Software (monthly subscription)
+    category: IT_UTILITIES
+    entities: [MX01, US01]
+    terms: NET 30
+    amount_usd: [4500, 4500]
+    weight: 0
+    invoice_format: "CO-{n:05d}"
+    recurring_fee: 4500             # the same amount every month: must NOT look like a duplicate
+  SUP-TELENET:
+    name: Telenet Communications
+    category: IT_UTILITIES
+    entities: [MX01, US01]
+    terms: NET 30
+    amount_usd: [1200, 1200]
+    weight: 0
+    invoice_format: "TEL{n:06d}"
+    recurring_fee: 1200
+  SUP-ENERGIA:
+    name: Energía Industrial (electricity)
+    category: IT_UTILITIES
+    entities: [MX01]
+    terms: NET 15
+    amount_usd: [18000, 30000]
+    weight: 1
+    invoice_format: "EI-{n:05d}"
+  SUP-DATAPRINT:
+    name: Dataprint Office Supplies
+    category: IT_UTILITIES
+    entities: [MX01, US01]
+    terms: NET 30
+    amount_usd: [100, 900]
+    weight: 3
+    invoice_format: "DP{n:05d}"

@@ -1,0 +1,80 @@
+# =============================================================================
+# config/settings.yaml — every tunable value of the project, in one place.
+#
+# Who reads it:
+#   - Python (generators, scripts) through src/common/settings.py
+#   - Terraform through yamldecode(file(...)), which passes values to Lambda (env vars)
+#     and Glue (job arguments)
+#
+# What does NOT belong here:
+#   - Master data (entities, supplier categories, suppliers, payment terms) -> config/master_data.yaml
+#   - Protocol constants nobody should tune (file columns, payment types) -> src/common/schema.py
+# =============================================================================
+
+project:
+  name: ap-duplicate-payment-detection
+  region: us-east-1
+
+# -----------------------------------------------------------------------------
+# Reporting
+# -----------------------------------------------------------------------------
+reporting:
+  # Every KPI is reported in USD so totals add up across entities. A fixed rate keeps the demo
+  # reproducible; in production this would come from the treasury's daily rate table.
+  mxn_per_usd: 18.0
+
+# -----------------------------------------------------------------------------
+# Simulation: how the ERP behaves, and the problems planted in the data (docs/spec.md, section 3)
+# -----------------------------------------------------------------------------
+simulation:
+  seed: 42                          # same seed -> same files -> same README numbers
+  history_days: 90                  # days of payment files to produce
+  warm_up_days: 45                  # invoices start this many days earlier, so day 1 already has payments due
+
+  # New invoices received per business day, per entity (Monday-Friday)
+  invoices_per_day:
+    MX01: 55
+    US01: 40
+
+  # Weekdays each entity runs payments (0 = Monday ... 4 = Friday)
+  payment_weekdays:
+    MX01: [0, 1, 2, 3, 4]           # pays every business day
+    US01: [4]                       # pays on Fridays only (spec problem 4)
+
+  # Whether AP schedules invoices with discount terms for the discount deadline (true) or simply
+  # for the due date (false). Either way it pays on the last payment-run day before the target.
+  take_discounts:
+    MX01: true                      # captures most 2/10 discounts
+    US01: false                     # Friday-only runs, aimed at due dates: on time, but discounts lost
+
+  # Share of eligible invoices settled with an advance first and the balance later (legitimate)
+  advance_share: 0.25
+  advance_pct: 0.30                 # the advance is 30% of the invoice
+  advance_after_days: 2             # paid this many days after the invoice date
+
+  # The problems planted in the data (spec section 3). Counts are over the whole history.
+  incidents:
+    format_duplicate:               # problem 1: the same invoice keyed twice with a different number format
+      entity: MX01
+      count: 12
+      days_after_original: [3, 15]  # the second payment leaves this many days after the first
+    resubmitted_invoice:            # problem 2: the supplier sends the same invoice again with a new number
+      entity: US01
+      supplier: SUP-TRANSNORTE
+      count: 8
+      days_after_original: [1, 5]   # the resubmitted invoice is dated a few days after the original
+    advance_overpaid:               # problem 3: an advance is paid, then the full amount anyway
+      count: 6                      # split between both entities
+    late_supplier:                  # problem 5: one supplier always paid late
+      entity: MX01
+      supplier: SUP-ANDINA
+      extra_days: [8, 25]           # days after the due date
+
+# -----------------------------------------------------------------------------
+# File format of the ERP export (one file per entity per day)
+# -----------------------------------------------------------------------------
+files:
+  landing_prefix: landing/ap        # s3://<bucket>/landing/ap/entity=<ENTITY>/<ENTITY>_ap_<YYYYMMDD>.csv
+
+# AWS sizing and timings (cheap defaults; see docs/spec.md cost estimate). Filled in at level 4.
+aws: {}
