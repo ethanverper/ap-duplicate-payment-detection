@@ -13,8 +13,8 @@ A file-driven AWS pipeline for accounts payable. It checks every ERP payment fil
 |---|---|---|
 | 0 | Business case, KPIs, planted data story, design, cost estimate ([docs/spec.md](docs/spec.md)) | ✅ Done |
 | 1 | ERP simulator: 2 entities (MX/US), 16 suppliers, 90 days of daily payment files with control trailers, and the planted problems with an answer key | ✅ Done |
-| 2 | File validation (trailer, schema, re-sent files) | ⏳ Next |
-| 3 | Duplicate detection with confidence tiers + KPIs (PySpark), graded against the answer key | ⏳ |
+| 2 | File validation Lambda: control trailer, header contract, row structure, entity/day consistency; re-sent files are idempotent; refused files are quarantined with reasons and AP is emailed | ✅ Done |
+| 3 | Duplicate detection with confidence tiers + KPIs (PySpark), graded against the answer key | ⏳ Next |
 | 4 | Terraform: S3 events → Lambda, Glue + Data Quality, Athena, SNS | ⏳ |
 | 5 | Real deploy with evidence, cost report, teardown | ⏳ |
 
@@ -63,7 +63,7 @@ There are also traps the detector must **not** fall into:
 Setup and every configuration value: [docs/configuration.md](docs/configuration.md)
 
 ```bash
-make install && make test   # unit tests, no AWS
+make install && make test   # unit tests + the Lambda against simulated AWS (moto), no AWS account needed
 make generate               # 90 days of ERP files + master data + answer key into data/generated/
 ```
 
@@ -71,11 +71,12 @@ make generate               # 90 days of ERP files + master data + answer key in
 
 ```
 config/            settings.yaml (every tunable value) · master_data.yaml (entities, suppliers, terms)
-docs/              spec, configuration, coding standards
+docs/              spec, design decisions, configuration, coding standards
 src/
   common/          the file contract (schema), settings, config, logging, AWS clients
   generators/      reference (master data, payment terms) · story (planted problems) · simulator · files · history
-tests/             unit tests
+  lambdas/         file_validator: validation (pure checks) · storage (S3 zones) · notifier (SNS) · handler
+tests/             unit tests, and moto-backed tests of the Lambda against simulated S3 and SNS
 ```
 
 Code standards: modular, typed, commented at every step. See [docs/CODING_STANDARDS.md](docs/CODING_STANDARDS.md).

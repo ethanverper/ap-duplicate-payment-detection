@@ -2,7 +2,7 @@
 
 Everything you can change, where it lives, and what to do after changing it. Someone running the project for the first time should only need this page and the README.
 
-> Built level by level: this page grows with each level. Today it covers the data generator (level 1).
+> Built level by level: this page grows with each level. Today it covers the data generator (level 1) and the file validator (level 2).
 
 ## 1. Prerequisites
 | Tool | Version | Why | Check |
@@ -38,7 +38,10 @@ make install   # Python dependencies
 | `simulation.incidents.resubmitted_invoice` | Problem 2: entity, supplier, count, days between invoice dates | Planting resubmissions somewhere else |
 | `simulation.incidents.advance_overpaid` | Problem 3: count (split between entities) | More or fewer overpaid advances |
 | `simulation.incidents.late_supplier` | Problem 5: entity, supplier, days late | Another chronically late supplier |
-| `files.landing_prefix` | Where the ERP files go in the bucket (and in the local output folder) | Changing the lake layout |
+| `files.landing_prefix` | Where the ERP files land, as received (and the local output folder layout) | Changing the lake layout |
+| `files.validated_prefix` | Where valid files are copied: `<prefix>/entity=<E>/dt=<YYYY-MM-DD>/<file>` | Changing the lake layout |
+| `files.rejected_prefix` | Where refused files are copied, each with a `.reason.json` | Changing the lake layout |
+| `files.max_file_mb` | Files above this size are refused without being read | Exports get much bigger |
 
 ### `config/master_data.yaml`
 - **`entities`:** id → `name`, `currency` (MXN or USD). The first level of every KPI.
@@ -58,7 +61,26 @@ make install   # Python dependencies
   | `advances` | optional | `true` if its invoices can be settled as advance + final | `true` |
 
 ## 4. Values passed to AWS components
-_From level 4._
+
+The file-validator Lambda (`src/lambdas/file_validator/`) reads only environment variables. Terraform will set them in level 4:
+
+| Environment variable | Source |
+|---|---|
+| `KNOWN_ENTITIES` | `config/master_data.yaml` → `entities` keys, comma-separated (`MX01,US01`) |
+| `VALIDATED_PREFIX` | `files.validated_prefix` |
+| `REJECTED_PREFIX` | `files.rejected_prefix` |
+| `MAX_FILE_MB` | `files.max_file_mb` |
+| `ALERT_TOPIC_ARN` | The SNS topic Terraform creates |
+
+If one is missing, the Lambda stops at start-up rather than judging files with a made-up default.
+
+**What the Lambda decides for each file** (`docs/decisions.md`, ADR-002 to ADR-004):
+
+| Outcome | When | What happens |
+|---|---|---|
+| `VALIDATED` | Name, header, every row and the control trailer check out | Copied to `validated/` with its SHA-256, record count and total as metadata |
+| `DUPLICATE` | That entity and day were already validated **with identical bytes** | Nothing (a harmless retry), logged |
+| `REJECTED` | Any integrity issue, **or** a different file for a day already loaded | Copied to `rejected/` + `.reason.json`, and an email to AP (SNS, attributes `kind=FILE_REJECTED`, `entity`) |
 
 ## 5. Private and generated files (never committed)
 | Path | What | Recreate with |
@@ -70,7 +92,7 @@ _From level 4._
 ## 6. Running it, in order
 | Step | Command | What happens | Cost |
 |---|---|---|---|
-| 1 | `make test` | Unit tests | $0 |
+| 1 | `make test` | Unit tests, plus the file validator against simulated S3 and SNS (moto) | $0 |
 | 2 | `make generate` | 90 days of ERP files, master data and the answer key in `data/generated/` | $0 |
 
 ## 7. Common changes
