@@ -24,6 +24,20 @@ reporting:
   mxn_per_usd: 18.0
 
 # -----------------------------------------------------------------------------
+# Business rules: how a duplicate payment is recognized (docs/kpi-dictionary.md)
+# -----------------------------------------------------------------------------
+detection:
+  # HIGH confidence: the same supplier invoice (same supplier, same invoice number once normalized:
+  # case, separators and leading zeros ignored) was paid more than its amount.
+  overpayment_tolerance: 0.01       # in the invoice currency: anything above a cent paid in excess counts
+  # MEDIUM confidence: a supplier invoices the exact same amount again under another number, dated
+  # within this many days of the first one (a resubmission). Monthly fees are ~30 days apart: not caught.
+  resubmission_window_days: 7
+
+kpis:
+  on_time_alert_pct: 90.0           # a supplier paid on time less often than this is highlighted
+
+# -----------------------------------------------------------------------------
 # Simulation: how the ERP behaves, and the problems planted in the data (docs/spec.md, section 3)
 # -----------------------------------------------------------------------------
 simulation:
