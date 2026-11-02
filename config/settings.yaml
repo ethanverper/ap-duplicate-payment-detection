@@ -74,7 +74,10 @@ simulation:
 # File format of the ERP export (one file per entity per day)
 # -----------------------------------------------------------------------------
 files:
-  landing_prefix: landing/ap        # s3://<bucket>/landing/ap/entity=<ENTITY>/<ENTITY>_ap_<YYYYMMDD>.csv
+  landing_prefix: landing/ap        # s3://<bucket>/landing/ap/entity=<ENTITY>/<ENTITY>_ap_<YYYYMMDD>.csv (as received, never changed)
+  validated_prefix: validated/ap    # files that passed the checks: validated/ap/entity=<E>/dt=<YYYY-MM-DD>/<file>
+  rejected_prefix: rejected/ap      # files that failed: the file plus a .reason.json next to it
+  max_file_mb: 50                   # a daily AP file is a few hundred KB; anything bigger is not a normal export
 
 # AWS sizing and timings (cheap defaults; see docs/spec.md cost estimate). Filled in at level 4.
 aws: {}
