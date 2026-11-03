@@ -1,0 +1,33 @@
+# =============================================================================
+# config/subscribers.example.yaml — WHO receives the AP emails, and WHICH ones.
+#
+# Copy it to config/subscribers.yaml and put real addresses there. That file is in .gitignore:
+# email addresses never reach the repository.
+#
+# How it works (details in docs/configuration.md):
+#   - Terraform creates one SNS email subscription per entry, with a filter policy built from
+#     `alerts` and `entities`. Every email is tagged with its kind and entity, and SNS delivers it
+#     only to the subscriptions whose filter matches.
+#   - Each address receives an "AWS Notification - Subscription Confirmation" email after
+#     `make deploy`. Nothing arrives until the link in it is clicked.
+#   - To add or remove someone: edit this list, then `make deploy` again.
+#
+# Fields:
+#   email     (required) where the emails go
+#   role      (required) who this is; documentation only, also used in the subscription name
+#   alerts    (optional) kinds to receive: FILE_REJECTED, DUPLICATE_PAYMENT. Omit = all kinds.
+#   entities  (optional) entities to receive: MX01, US01. Omit = all entities.
+# =============================================================================
+
+subscribers:
+  - email: ap.mexico@example.com
+    role: AP Mexico
+    entities: [MX01]
+
+  - email: ap.usa@example.com
+    role: AP USA
+    entities: [US01]
+
+  - email: erp.support@example.com
+    role: ERP support
+    alerts: [FILE_REJECTED]          # only files that must be re-exported, from every entity

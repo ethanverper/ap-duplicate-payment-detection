@@ -1,5 +1,15 @@
-# 0_main.tf: provider, shared settings and the data lake bucket.
-# Add one numbered file per pipeline stage: 1_ingestion.tf, 2_processing.tf, 3_alerts.tf, 4_analytics.tf ...
+# =============================================================================
+# 0_main.tf — provider, the central configuration, and the data lake bucket.
+#
+# The stack is split into one numbered file per pipeline stage, in the order data flows:
+#   0_main.tf        provider, settings (from config/*.yaml), S3 bucket
+#   1_ingestion.tf   S3 event → file_validator Lambda (every ERP file checked as it lands)
+#   2_batch.tf       Glue job: duplicates, KPIs, Data Quality, duplicate emails
+#   3_alerts.tf      SNS topic + one filtered email subscription per person
+#   4_analytics.tf   Glue Catalog tables + Athena workgroup
+#   outputs.tf       names other tools need (Makefile, scripts)
+# Terraform reads every .tf file in this folder as one configuration; the numbers are for humans.
+# =============================================================================
 
 terraform {
   required_version = ">= 1.6"
@@ -9,27 +19,52 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.60"
     }
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.4"
+    }
   }
 }
 
-variable "project" {
-  description = "Repo name. Tags every resource so its cost can be tracked."
-  type        = string
-  default     = "<repo-name>"
-}
+# ---------- Central configuration (docs/configuration.md explains every file) ----------
 
-variable "region" {
-  type    = string
-  default = "us-east-1"
+locals {
+  # Every tunable value and the master data: the same files the Python code reads
+  settings    = yamldecode(file("${path.module}/../../config/settings.yaml"))
+  master_data = yamldecode(file("${path.module}/../../config/master_data.yaml"))
+
+  # Who receives which emails. Private file (gitignored); without it, no subscriptions are created.
+  # Each entry is normalized to one shape (missing lists become []), because Terraform needs every
+  # element of a collection to have the same type.
+  subscribers = [
+    for subscriber in try(yamldecode(file("${path.module}/../../config/subscribers.yaml")).subscribers, []) : {
+      email    = subscriber.email
+      role     = subscriber.role
+      alerts   = try(subscriber.alerts, [])
+      entities = try(subscriber.entities, [])
+    }
+  ]
+
+  # Short names used everywhere below
+  project  = local.settings.project.name
+  aws      = local.settings.aws
+  files    = local.settings.files
+  entities = keys(local.master_data.entities)
+
+  # Bucket names are global across all AWS accounts: the account id makes ours unique
+  bucket_name = "${local.project}-${data.aws_caller_identity.current.account_id}"
+
+  # Repository root, for packaging code from src/
+  repo_root = "${path.module}/../.."
 }
 
 provider "aws" {
-  region = var.region
+  region = local.settings.project.region
 
-  # Every resource gets these tags -> Cost Explorer can report this project's exact cost.
+  # Every resource gets these tags, so Cost Explorer can report this project's exact cost
   default_tags {
     tags = {
-      Project   = var.project
+      Project   = local.project
       ManagedBy = "terraform"
     }
   }
@@ -38,13 +73,9 @@ provider "aws" {
 # Who is running Terraform: used to build a bucket name that is unique per AWS account
 data "aws_caller_identity" "current" {}
 
-locals {
-  bucket_name = "${var.project}-${data.aws_caller_identity.current.account_id}" # unique per account
-}
+# ---------- Data lake bucket: landing/ validated/ rejected/ reference/ curated/ quarantine/ gold/ ----------
 
-# ---------- Data lake bucket: raw/ curated/ gold/ scripts/ athena-results/ ----------
-
-# The single bucket that holds every layer of the lake (one prefix per layer)
+# The single bucket that holds every zone of the lake (one prefix per zone)
 resource "aws_s3_bucket" "lake" {
   bucket        = local.bucket_name
   force_destroy = true # demo project: destroy also deletes the data
@@ -102,11 +133,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "lake" {
     }
 
     expiration {
-      days = 7
+      days = local.aws.athena.results_expiration_days
     }
   }
-}
-
-output "bucket" {
-  value = aws_s3_bucket.lake.bucket
 }

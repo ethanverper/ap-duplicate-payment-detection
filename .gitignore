@@ -16,3 +16,9 @@ data/lake-local/
 spark-warehouse/
 metastore_db/
 derby.log
+
+# Real alert subscribers (email addresses): never committed. Template: config/subscribers.example.yaml
+config/subscribers.yaml
+
+# Terraform packaging output
+infra/terraform/build/

@@ -93,5 +93,22 @@ files:
   rejected_prefix: rejected/ap      # files that failed: the file plus a .reason.json next to it
   max_file_mb: 50                   # a daily AP file is a few hundred KB; anything bigger is not a normal export
 
-# AWS sizing and timings (cheap defaults; see docs/spec.md cost estimate). Filled in at level 4.
-aws: {}
+# -----------------------------------------------------------------------------
+# AWS sizing and timings (read by Terraform; cheap defaults, see docs/spec.md section 5)
+# -----------------------------------------------------------------------------
+aws:
+  lambda:
+    timeout_seconds: 30               # a daily file is checked in well under a second
+    memory_mb: 256
+    log_retention_days: 1
+  glue:
+    glue_version: "5.0"               # Spark 3.5 + Python 3.11 (the tests use the same PySpark)
+    worker_type: G.1X
+    number_of_workers: 2
+    timeout_minutes: 10               # stops a runaway job (and its bill)
+    schedule_cron: "cron(0 13 * * ? *)" # 13:00 UTC = 07:00 in Mexico, after the 06:00 ERP exports
+    schedule_enabled: false           # off by default: a forgotten schedule keeps billing
+  athena:
+    bytes_scanned_cutoff_per_query: 1073741824  # 1 GB per query, then Athena cancels it
+    results_expiration_days: 7
+    projection_days_back: 120         # partition projection covers dt from 120 days ago (90 days of history)
