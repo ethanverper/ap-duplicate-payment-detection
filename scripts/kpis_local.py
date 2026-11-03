@@ -26,6 +26,7 @@ def job_argv(input_root: str, output_root: str) -> list[str]:
         "--output_root", output_root,
         "--overpayment_tolerance", str(config["detection"]["overpayment_tolerance"]),
         "--resubmission_window_days", str(config["detection"]["resubmission_window_days"]),
+        "--dq_ruleset_path", "dq/curated_payments.dqdl",  # read and checked; evaluated only on Glue
     ]  # fmt: skip
 
 

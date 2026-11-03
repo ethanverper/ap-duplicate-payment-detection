@@ -1,0 +1,27 @@
+# =============================================================================
+# dq/curated_payments.dqdl — Glue Data Quality ruleset for the curated payments table.
+#
+# Written in DQDL (Data Quality Definition Language). The Glue job evaluates it on every run, right
+# before writing, and publishes the outcome to the job's "Data quality" tab in the Glue console.
+#
+# Why rules here AND in transforms.validate_rows (docs/decisions.md, ADR-008):
+#   validate_rows quarantines individual bad payments; this ruleset asserts properties of the
+#   whole table after that cleaning (no id twice, every value in its domain, enough rows). If one
+#   fails, something upstream changed (the export, master data, or our own code).
+#
+# Every value list must match src/common/schema.py and config/master_data.yaml:
+# tests/glue_jobs/test_data_quality.py checks that they agree.
+# =============================================================================
+Rules = [
+    RowCount > 0,
+    IsComplete "payment_id",
+    IsUnique "payment_id",
+    IsComplete "invoice_key",
+    IsComplete "category",
+    ColumnValues "entity" in ["MX01", "US01"],
+    ColumnValues "currency" in ["MXN", "USD"],
+    ColumnValues "payment_type" in ["FULL", "ADVANCE", "FINAL"],
+    ColumnValues "paid_amount" > 0,
+    ColumnValues "invoice_amount" > 0,
+    ColumnValues "paid_amount_usd" > 0
+]
