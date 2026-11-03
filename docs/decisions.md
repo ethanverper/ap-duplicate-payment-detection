@@ -65,3 +65,25 @@ One short entry per non-obvious choice.
 - **Consequences:**
   - a change to a rule that adds false alarms or loses duplicates fails the build;
   - the README reports precision and recall, not just a count.
+
+## ADR-008: Glue Data Quality reports; it doesn't block the day
+- **Context:** bad payments are already quarantined one by one (`validate_rows`). A DQDL ruleset adds table-level assertions: no `payment_id` twice, every value in its domain, enough rows.
+- **Decision:**
+  - The ruleset lives in the repo (`dq/curated_payments.dqdl`), versioned like code. Its value lists are tested against the file contract and master data.
+  - The job evaluates it on the curated table before writing. Results go to the job's **Data quality** tab and the logs: a failed rule is logged as a warning.
+  - It does **not** stop the job.
+- **Alternatives:** failing the run on any failed rule. A drift nobody planned for, such as a new entity in master data, would then also stop the day's duplicate emails, which are the reason the pipeline exists.
+- **Consequences:**
+  - The integrity checks that must block are elsewhere: the Lambda (file) and the reconciliation (rows).
+  - Glue-only libraries can't run locally, so the evaluation itself is first exercised on AWS (level 5). The ruleset's content is tested locally.
+
+## ADR-009: Duplicate emails come from the Glue job, HIGH only, one per entity
+- **Context:** HIGH-confidence suspects are arithmetic proof of an overpayment, and AP should know the same day. MEDIUM suspects need a person's judgment.
+- **Decision:**
+  - After writing, the job publishes one SNS email per entity, listing that entity's HIGH suspects paid on the newest date.
+  - It uses the same topic and message attributes (`kind=DUPLICATE_PAYMENT`, `entity`) as the rejected-file email, so each person's filter policy decides what reaches them.
+  - MEDIUM suspects go to the Athena review list (`sql/02_duplicate_review_list.sql`).
+- **Alternatives:**
+  - A separate Lambda reading the gold table: one more component for the same result.
+  - Emailing every suspect: alert fatigue, the lesson of manufacturing-scrap-and-stockout-alerts.
+- **Consequences:** a full-refresh run re-finds old suspects, but only the newest day's are emailed, so nobody is alerted twice for the same payment.

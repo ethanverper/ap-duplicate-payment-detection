@@ -2,7 +2,7 @@
 
 Everything you can change, where it lives, and what to do after changing it. Someone running the project for the first time should only need this page and the README.
 
-> Built level by level: this page grows with each level. Today it covers the data generator (level 1), the file validator (level 2) and the duplicate detector and KPI job (level 3).
+> Built level by level: this page grows with each level. Today it covers the data generator (level 1), the file validator (level 2), the duplicate detector and KPI job (level 3), and the AWS infrastructure (level 4).
 
 ## 1. Prerequisites
 | Tool | Version | Why | Check |
@@ -20,7 +20,10 @@ make install   # Python dependencies (boto3, pyyaml, pytest, ruff, moto, pyspark
 | File | In git? | What it holds | Who reads it |
 |---|---|---|---|
 | `config/settings.yaml` | ✅ | Every tunable value: reporting rate, simulation volume and policies, the planted problems, file layout | Python (`src/common/settings.py`); Terraform from level 4 |
-| `config/master_data.yaml` | ✅ | Entities, supplier categories, suppliers and their payment terms | Python (`src/generators/reference.py`) |
+| `config/master_data.yaml` | ✅ | Entities, supplier categories, suppliers and their payment terms | Python (`src/generators/reference.py`); Terraform (entity list for the Lambda) |
+| `config/subscribers.yaml` | ❌ gitignored | Who receives which AP emails (real addresses) | Terraform (SNS subscriptions) |
+| `config/subscribers.example.yaml` | ✅ | Template of the file above | You |
+| `dq/curated_payments.dqdl` | ✅ | Glue Data Quality ruleset for the curated payments | The Glue job (uploaded by Terraform) |
 
 ## 3. What each file contains
 
@@ -46,6 +49,21 @@ make install   # Python dependencies (boto3, pyyaml, pytest, ruff, moto, pyspark
 | `files.validated_prefix` | Where valid files are copied: `<prefix>/entity=<E>/dt=<YYYY-MM-DD>/<file>` | Changing the lake layout |
 | `files.rejected_prefix` | Where refused files are copied, each with a `.reason.json` | Changing the lake layout |
 | `files.max_file_mb` | Files above this size are refused without being read | Exports get much bigger |
+| `aws.lambda` | `timeout_seconds`, `memory_mb`, `log_retention_days` of the file validator | Bigger files |
+| `aws.glue` | `glue_version`, `worker_type`, `number_of_workers`, `timeout_minutes`, `schedule_cron`, `schedule_enabled` | More data; turning the daily schedule on (it bills every day) |
+| `aws.athena` | `bytes_scanned_cutoff_per_query`, `results_expiration_days`, `projection_days_back` (must cover the history: 120 for 90 days) | Querying older data |
+
+### `config/subscribers.yaml` (who receives the AP emails)
+Copy `config/subscribers.example.yaml` to `config/subscribers.yaml` and put real addresses there. Terraform creates one SNS email subscription per entry, with a filter policy built from its optional lists.
+
+| Field | Required | Meaning | Example |
+|---|---|---|---|
+| `email` | ✅ | Where the emails go | `ap.mexico@example.com` |
+| `role` | ✅ | Who it is (documentation, and part of the subscription's name) | `AP Mexico` |
+| `alerts` | optional | Kinds to receive: `FILE_REJECTED` (from the Lambda), `DUPLICATE_PAYMENT` (from the Glue job). Omit = all. | `[FILE_REJECTED]` |
+| `entities` | optional | Entities to receive: `MX01`, `US01`. Omit = all. | `[MX01]` |
+
+After `make deploy`, **each address receives "AWS Notification - Subscription Confirmation"; nothing arrives until its link is clicked.**
 
 ### `config/master_data.yaml`
 - **`entities`:** id → `name`, `currency` (MXN or USD). The first level of every KPI.
@@ -66,7 +84,7 @@ make install   # Python dependencies (boto3, pyyaml, pytest, ruff, moto, pyspark
 
 ## 4. Values passed to AWS components
 
-The file-validator Lambda (`src/lambdas/file_validator/`) reads only environment variables. Terraform will set them in level 4:
+The file-validator Lambda (`src/lambdas/file_validator/`) reads only environment variables. Terraform sets them in `infra/terraform/1_ingestion.tf`:
 
 | Environment variable | Source |
 |---|---|
@@ -78,7 +96,7 @@ The file-validator Lambda (`src/lambdas/file_validator/`) reads only environment
 
 If one is missing, the Lambda stops at start-up rather than judging files with a made-up default.
 
-The Glue job (`src/glue_jobs/daily_ap_kpis.py`) reads only its job arguments. Terraform will set them in level 4; locally, `scripts/kpis_local.py` builds the same list:
+The Glue job (`src/glue_jobs/daily_ap_kpis.py`) reads only its job arguments. Terraform sets them in `infra/terraform/2_batch.tf` (`default_arguments`); locally, `scripts/kpis_local.py` builds the same list:
 
 | Job argument | Source |
 |---|---|
@@ -86,6 +104,11 @@ The Glue job (`src/glue_jobs/daily_ap_kpis.py`) reads only its job arguments. Te
 | `--files_prefix` | `files.validated_prefix` on AWS (the Lambda's output); `files.landing_prefix` locally (no Lambda in between) |
 | `--overpayment_tolerance` | `detection.overpayment_tolerance` |
 | `--resubmission_window_days` | `detection.resubmission_window_days` |
+| `--dq_ruleset_path` | `s3://<bucket>/scripts/dq/curated_payments.dqdl` on AWS; `dq/curated_payments.dqdl` locally (read and checked, evaluated only on Glue) |
+| `--alert_topic_arn` | The SNS topic on AWS; empty locally (no email) |
+| `--alert_date` | Optional: the payment date whose HIGH suspects are emailed (default: the newest date in the data) |
+
+**Infrastructure** (`infra/terraform/`, 30 resources): the bucket (private, encrypted, TLS only), the S3 → Lambda trigger on `landing/ap/*.csv`, the Lambda, the Glue job with its trigger **disabled**, the SNS topic and subscriptions, 6 Athena tables with partition projection, and a workgroup capped at 1 GB per query. `terraform output` gives `bucket`, `file_validator_function`, `glue_job_name`, `alerts_topic_arn`, `alert_subscriptions`, `athena_workgroup` and `athena_database`.
 
 **What the Lambda decides for each file** (`docs/decisions.md`, ADR-002 to ADR-004):
 
@@ -102,6 +125,9 @@ The Glue job (`src/glue_jobs/daily_ap_kpis.py`) reads only its job arguments. Te
 | `data/generated/reference/` | `suppliers/suppliers.csv`, `entities/entities.csv` | `make generate` |
 | `data/generated/truth/planted_problems.csv` | The answer key: which payments are planted problems. Local only, never uploaded: the pipeline must find them on its own. | `make generate` |
 | `data/lake-local/` | The Glue job's output run locally: `curated/`, `quarantine/`, `gold/` | `make kpis-local` |
+| `config/subscribers.yaml` | Real email addresses | `cp config/subscribers.example.yaml config/subscribers.yaml` |
+| `infra/terraform/.terraform/`, `*.tfstate*` | Terraform's provider cache and record of what it created. **Keep the state until `make destroy`.** | `terraform init` / `apply` |
+| `infra/terraform/build/` | The Lambda and Glue zips, and `deploy_started_at` (used by `make clean-glue-logs`) | `make deploy` |
 
 ## 6. Running it, in order
 | Step | Command | What happens | Cost |
@@ -110,6 +136,11 @@ The Glue job (`src/glue_jobs/daily_ap_kpis.py`) reads only its job arguments. Te
 | 2 | `make generate` | 90 days of ERP files, master data and the answer key in `data/generated/` | $0 |
 | 3 | `make kpis-local` | The Glue job on those files with a local Spark: duplicate suspects, payment KPIs, reconciliation | $0 |
 | 4 | `make grade` | Precision and recall of the duplicate detector against the answer key | $0 |
+| 5 | `make deploy` | Creates the 30 resources. **Confirm the subscription emails.** | $0 until something runs |
+| 6 | `make upload-reference` | Master data to `reference/` | ~$0 |
+| 7 | `make upload-history` | 130 ERP files to `landing/`: each triggers the Lambda and lands in `validated/` | ~$0 |
+| 8 | `make kpis` | The Glue job on AWS: suspects, KPIs, Data Quality, duplicate emails (~3 min) | ~$0.05 per run |
+| 9 | `make destroy` → `make clean-glue-logs` → `make leftovers` | Delete everything, then prove nothing is left | — |
 
 ## 7. Common changes
 | I want to… | Edit | Then |

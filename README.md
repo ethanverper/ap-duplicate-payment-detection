@@ -15,8 +15,8 @@ A file-driven AWS pipeline for accounts payable. It checks every ERP payment fil
 | 1 | ERP simulator: 2 entities (MX/US), 16 suppliers, 90 days of daily payment files with control trailers, and the planted problems with an answer key | ✅ Done |
 | 2 | File validation Lambda: control trailer, header contract, row structure, entity/day consistency; re-sent files are idempotent; refused files are quarantined with reasons and AP is emailed | ✅ Done |
 | 3 | Duplicate detection with confidence tiers + payment KPIs (PySpark), **graded against the answer key: 26/26 found, 0 false alarms** | ✅ Done |
-| 4 | Terraform: S3 events → Lambda, Glue + Data Quality, Athena, SNS | ⏳ Next |
-| 5 | Real deploy with evidence, cost report, teardown | ⏳ |
+| 4 | Terraform (30 resources): S3 event → Lambda, Glue job + **Glue Data Quality** (DQDL), duplicate emails by entity, 5 Athena queries with `ROLLUP` (tested on local Spark) | ✅ Done |
+| 5 | Real deploy with evidence, cost report, teardown | ⏳ Next |
 
 ## 1. The business problem
 
@@ -95,15 +95,18 @@ make grade                  # precision and recall against the answer key
 ## Repository layout (so far)
 
 ```
-config/            settings.yaml (every tunable value) · master_data.yaml (entities, suppliers, terms)
+config/            settings.yaml (every tunable value) · master_data.yaml (entities, suppliers, terms) · subscribers.example.yaml
+dq/                curated_payments.dqdl (Glue Data Quality ruleset)
+infra/terraform/   one numbered file per stage: ingestion, batch, alerts, analytics
+sql/               one query per business question (ROLLUP), runs on Athena and Spark
 docs/              spec, KPI dictionary, design decisions, lessons learned, configuration, coding standards
 src/
   common/          the file contract (schema), settings, config, logging, AWS clients
   generators/      reference (master data, payment terms) · story (planted problems) · simulator · files · history
   lambdas/         file_validator: validation (pure checks) · storage (S3 zones) · notifier (SNS) · handler
-  glue_jobs/       daily_ap_kpis (extract → transform → reconcile → load) · transforms (pure PySpark: rules, detection, KPIs)
+  glue_jobs/       daily_ap_kpis (extract → transform → reconcile → quality → load → alert) · transforms (pure PySpark) · data_quality · alerts
   evaluation/      grading: the detector against the answer key
-scripts/           kpis_local · grade_detection
+scripts/           kpis_local · grade_detection · leftovers · clean_glue_logs · cost
 tests/             unit tests, moto-backed tests of the Lambda, and local-Spark tests of the Glue job
 ```
 
