@@ -16,7 +16,7 @@ A file-driven AWS pipeline for accounts payable. It checks every ERP payment fil
 | 2 | File validation Lambda: control trailer, header contract, row structure, entity/day consistency; re-sent files are idempotent; refused files are quarantined with reasons and AP is emailed | ✅ Done |
 | 3 | Duplicate detection with confidence tiers + payment KPIs (PySpark), **graded against the answer key: 26/26 found, 0 false alarms** | ✅ Done |
 | 4 | Terraform (30 resources): S3 event → Lambda, Glue job + **Glue Data Quality** (DQDL), duplicate emails by entity, 5 Athena queries with `ROLLUP` (tested on local Spark) | ✅ Done |
-| 5 | Real deploy with evidence, cost report, teardown | ⏳ Next |
+| 5 | Real deploy with a live demo (rejected file, re-sent file, duplicate email), evidence, cost report, teardown | ⏳ Next: everything prepared and tested locally |
 
 ## 1. The business problem
 
@@ -106,7 +106,8 @@ src/
   lambdas/         file_validator: validation (pure checks) · storage (S3 zones) · notifier (SNS) · handler
   glue_jobs/       daily_ap_kpis (extract → transform → reconcile → quality → load → alert) · transforms (pure PySpark) · data_quality · alerts
   evaluation/      grading: the detector against the answer key
-scripts/           kpis_local · grade_detection · leftovers · clean_glue_logs · cost
+scripts/           kpis_local · grade_detection · demo · run_queries · evidence · leftovers · clean_glue_logs · cost
+  (src/analytics/ runs the sql/ queries on Athena)
 tests/             unit tests, moto-backed tests of the Lambda, and local-Spark tests of the Glue job
 ```
 

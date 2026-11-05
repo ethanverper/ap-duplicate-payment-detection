@@ -125,6 +125,7 @@ The Glue job (`src/glue_jobs/daily_ap_kpis.py`) reads only its job arguments. Te
 | `data/generated/reference/` | `suppliers/suppliers.csv`, `entities/entities.csv` | `make generate` |
 | `data/generated/truth/planted_problems.csv` | The answer key: which payments are planted problems. Local only, never uploaded: the pipeline must find them on its own. | `make generate` |
 | `data/lake-local/` | The Glue job's output run locally: `curated/`, `quarantine/`, `gold/` | `make kpis-local` |
+| `data/generated/demo/` | The live demo's files (`valid/`, `corrupt/`) | `make generate-demo` |
 | `config/subscribers.yaml` | Real email addresses | `cp config/subscribers.example.yaml config/subscribers.yaml` |
 | `infra/terraform/.terraform/`, `*.tfstate*` | Terraform's provider cache and record of what it created. **Keep the state until `make destroy`.** | `terraform init` / `apply` |
 | `infra/terraform/build/` | The Lambda and Glue zips, and `deploy_started_at` (used by `make clean-glue-logs`) | `make deploy` |
@@ -136,10 +137,14 @@ The Glue job (`src/glue_jobs/daily_ap_kpis.py`) reads only its job arguments. Te
 | 2 | `make generate` | 90 days of ERP files, master data and the answer key in `data/generated/` | $0 |
 | 3 | `make kpis-local` | The Glue job on those files with a local Spark: duplicate suspects, payment KPIs, reconciliation | $0 |
 | 4 | `make grade` | Precision and recall of the duplicate detector against the answer key | $0 |
+| 4b | `make generate-demo` | Like `generate`, but up to today, with the last business day kept apart as the live demo (`data/generated/demo/`: correct files, a hand-edited copy, and one injected duplicate) | $0 |
 | 5 | `make deploy` | Creates the 30 resources. **Confirm the subscription emails.** | $0 until something runs |
 | 6 | `make upload-reference` | Master data to `reference/` | ~$0 |
 | 7 | `make upload-history` | 130 ERP files to `landing/`: each triggers the Lambda and lands in `validated/` | ~$0 |
+| 7b | `make demo` | Uploads the demo day's files one by one: an edited file (rejected + email), the correct one (validated), the same again (duplicate, ignored), the US file (validated) | ~$0 |
 | 8 | `make kpis` | The Glue job on AWS: suspects, KPIs, Data Quality, duplicate emails (~3 min) | ~$0.05 per run |
+| 8b | `make queries` | Runs every `sql/` query on Athena, saves the results as CSV in `docs/images/results/` | < $0.01 |
+| 8c | `make evidence PHASE=…` | After each phase (`deployed`, `loaded`, `demo`, `batch`, `destroyed`): read-only CLI proof in `docs/evidence/<phase>/`, account id and emails redacted | ~$0 |
 | 9 | `make destroy` → `make clean-glue-logs` → `make leftovers` | Delete everything, then prove nothing is left | — |
 
 ## 7. Common changes
