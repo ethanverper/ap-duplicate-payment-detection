@@ -2,7 +2,7 @@ PROJECT ?= ap-duplicate-payment-detection  # same as config/settings.yaml -> pro
 TF := terraform -chdir=infra/terraform
 PYTHON ?= python3
 
-.PHONY: help install test lint fmt generate kpis-local grade deploy upload-reference upload-history kpis destroy clean-glue-logs leftovers cost cost-daily
+.PHONY: help install test lint fmt generate generate-demo kpis-local grade deploy upload-reference upload-history demo kpis queries evidence destroy clean-glue-logs leftovers cost cost-daily
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
@@ -24,6 +24,9 @@ fmt: ## Format Python and Terraform
 generate: ## Simulate 90 days of ERP payment files + master data + answer key into data/generated (local, no AWS)
 	$(PYTHON) -m src.generators.history --out data/generated
 
+generate-demo: ## Like generate, up to today: the last business day is kept out of the history as the live demo (data/generated/demo)
+	rm -rf data/generated && $(PYTHON) -m src.generators.history --out data/generated --demo
+
 kpis-local: ## Run the Glue job (duplicates + KPIs) on data/generated with a local Spark, into data/lake-local (no AWS)
 	$(PYTHON) -m scripts.kpis_local --input data/generated --output data/lake-local
 
@@ -41,8 +44,18 @@ upload-reference: ## Upload the master data (suppliers, entities) the Glue job j
 upload-history: ## Upload the 90 days of ERP files to landing/: every file triggers the validator Lambda
 	aws s3 sync data/generated/landing s3://$$($(TF) output -raw bucket)/landing/
 
+demo: ## Upload the demo day's files one by one and show how the Lambda reacts (after upload-history)
+	scripts/demo.sh
+
 kpis: ## Start the Glue job on AWS (~2 DPU x 3 min, about $0.05 a run); prints the run id
 	aws glue start-job-run --job-name $$($(TF) output -raw glue_job_name) --query JobRunId --output text
+
+queries: ## Run every sql/ query on Athena and save the results as CSV in docs/images/results (after kpis)
+	$(PYTHON) -m scripts.run_queries --out docs/images/results \
+		--workgroup $$($(TF) output -raw athena_workgroup) --database $$($(TF) output -raw athena_database)
+
+evidence: ## Save redacted proof of the deploy: make evidence PHASE=deployed|loaded|demo|batch|destroyed
+	scripts/evidence.sh $(PHASE)
 
 destroy: ## Delete everything
 	$(TF) destroy
