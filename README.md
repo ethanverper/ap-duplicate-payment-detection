@@ -5,7 +5,9 @@ A file-driven AWS pipeline for accounts payable. It checks every ERP payment fil
 ![CI](https://github.com/ethanverper/ap-duplicate-payment-detection/actions/workflows/ci.yml/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue) ![Terraform](https://img.shields.io/badge/IaC-Terraform-7B42BC) ![AWS](https://img.shields.io/badge/AWS-S3%20events%20·%20Lambda%20·%20Glue%20Data%20Quality%20·%20Athena%20·%20SNS-FF9900)
 
-> ✅ **Deployed for real on AWS, then destroyed.** 30 resources ran for 29 minutes, with a live demo: a hand-edited file rejected in seconds, a re-sent file ignored, and the duplicates found and emailed. Second project of the portfolio, after [manufacturing-scrap-and-stockout-alerts](https://github.com/ethanverper/manufacturing-scrap-and-stockout-alerts): the same company, now seen from finance.
+> ✅ **Deployed for real on AWS, then destroyed.** 30 resources ran for 29 minutes, with a live demo: a hand-edited file rejected in seconds, a re-sent file ignored, and every planted duplicate found (27 of 27). Second project of the portfolio, after [manufacturing-scrap-and-stockout-alerts](https://github.com/ethanverper/manufacturing-scrap-and-stockout-alerts): the same company, now seen from finance.
+>
+> 📸 **[See the evidence: 14 console screenshots in process order, the deploy log, and the raw CLI output →](docs/evidence/README.md)**
 
 ## Progress
 
@@ -90,7 +92,7 @@ The Friday-only payment calendar of US01 loses ten times more discount money tha
 | **Daily Glue job** | SUCCEEDED in 2 min 44 s · 6,337 rows reconciled · **Glue Data Quality 11/11 rules passed** |
 | **Detector on Athena** | **27 of 27 planted problems found, 0 false alarms**, $195,416 at risk (graded against the answer key) |
 | **Teardown** | `30 destroyed`, empty state, `make leftovers` → ✅ Nothing billable left |
-| **Evidence** | [deploy log](docs/evidence/deploy-log.md) · [CLI output per phase](docs/evidence/) · [14 console screenshots](docs/images/console/) · [Athena results](docs/images/results/) |
+| **Evidence** | **[All evidence, explained step by step](docs/evidence/README.md)** · [deploy log](docs/evidence/deploy-log.md) · [Athena results](docs/images/results/) |
 
 | A hand-edited file, rejected in seconds | Glue Data Quality: 11/11 rules | 10 concurrent Lambdas, 259 throttles, 0 lost |
 |---|---|---|
