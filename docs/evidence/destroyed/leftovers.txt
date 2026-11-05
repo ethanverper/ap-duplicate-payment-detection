@@ -1,0 +1,37 @@
+$ scripts/leftovers.sh ap-duplicate-payment-detection
+# captured 2026-11-05T01:45:39Z
+
+== 1. Resources still tagged Project=ap-duplicate-payment-detection
+  ✓ tagged resources: none
+
+== 2. Resources whose name starts with ap-duplicate-payment-detection
+  ✓ S3 buckets: none
+  ✓ Kinesis streams: none
+  ✓ Firehose streams: none
+  ✓ Lambda functions: none
+  ✓ DynamoDB tables: none
+  ✓ SNS topics: none
+  ✓ SQS queues: none
+  ✓ Glue jobs: none
+  ✓ Glue triggers: none
+  ✓ Glue databases: none
+  ✓ Athena workgroups: none
+  ✓ IAM roles: none
+  ✓ Log groups: none
+
+== 3. Services that bill by the hour (any project, this region)
+  ✓ Kinesis streams (any): none
+  ✓ Firehose streams (any): none
+  ✓ Flink applications: none
+  ✓ Glue triggers (activated): none
+  ✓ Glue jobs running: none
+  ✓ Redshift Serverless: none
+  ✓ EMR Serverless apps: none
+  ✓ NAT gateways: none
+  ✓ Interface VPC endpoints: none
+  ✓ SageMaker endpoints: none
+  ✓ OpenSearch Serverless: none
+
+== Note: log groups Glue created on its own (not a failure; remove with make clean-glue-logs)
+
+✅ Nothing billable left.

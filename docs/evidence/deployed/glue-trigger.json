@@ -1,0 +1,6 @@
+$ aws glue get-trigger --name ap-duplicate-payment-detection-daily --query Trigger.{schedule:Schedule,state:State}
+# captured 2026-11-05T01:17:34Z
+{
+    "schedule": "cron(0 13 * * ? *)",
+    "state": "CREATED"
+}

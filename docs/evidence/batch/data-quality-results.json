@@ -1,0 +1,84 @@
+$ bash -c id=$(aws glue list-data-quality-results --filter JobName=ap-duplicate-payment-detection-daily-kpis --query 'Results[0].ResultId' --output text); aws glue get-data-quality-result --result-id $id --query '{score:Score,rules:RuleResults[].{rule:Name,result:Result,evaluated:EvaluatedMetrics}}'
+# captured 2026-11-05T01:30:13Z
+{
+    "score": 1.0,
+    "rules": [
+        {
+            "rule": "Rule_1",
+            "result": "PASS",
+            "evaluated": {
+                "Dataset.*.RowCount": 6337.0
+            }
+        },
+        {
+            "rule": "Rule_2",
+            "result": "PASS",
+            "evaluated": {
+                "Column.payment_id.Completeness": 1.0
+            }
+        },
+        {
+            "rule": "Rule_3",
+            "result": "PASS",
+            "evaluated": {
+                "Column.payment_id.Uniqueness": 1.0
+            }
+        },
+        {
+            "rule": "Rule_4",
+            "result": "PASS",
+            "evaluated": {
+                "Column.invoice_key.Completeness": 1.0
+            }
+        },
+        {
+            "rule": "Rule_5",
+            "result": "PASS",
+            "evaluated": {
+                "Column.category.Completeness": 1.0
+            }
+        },
+        {
+            "rule": "Rule_6",
+            "result": "PASS",
+            "evaluated": {
+                "Column.entity.ColumnValues.Compliance": 1.0
+            }
+        },
+        {
+            "rule": "Rule_7",
+            "result": "PASS",
+            "evaluated": {
+                "Column.currency.ColumnValues.Compliance": 1.0
+            }
+        },
+        {
+            "rule": "Rule_8",
+            "result": "PASS",
+            "evaluated": {
+                "Column.payment_type.ColumnValues.Compliance": 1.0
+            }
+        },
+        {
+            "rule": "Rule_9",
+            "result": "PASS",
+            "evaluated": {
+                "Column.paid_amount.Minimum": 104.26
+            }
+        },
+        {
+            "rule": "Rule_10",
+            "result": "PASS",
+            "evaluated": {
+                "Column.invoice_amount.Minimum": 104.26
+            }
+        },
+        {
+            "rule": "Rule_11",
+            "result": "PASS",
+            "evaluated": {
+                "Column.paid_amount_usd.Minimum": 101.76
+            }
+        }
+    ]
+}

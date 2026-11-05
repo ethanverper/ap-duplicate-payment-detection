@@ -1,0 +1,19 @@
+$ aws s3api get-bucket-notification-configuration --bucket ap-duplicate-payment-detection-<account-id> --query LambdaFunctionConfigurations[].{events:Events,filter:Filter.Key.FilterRules}
+# captured 2026-11-05T01:17:27Z
+[
+    {
+        "events": [
+            "s3:ObjectCreated:*"
+        ],
+        "filter": [
+            {
+                "Name": "Prefix",
+                "Value": "landing/ap/"
+            },
+            {
+                "Name": "Suffix",
+                "Value": ".csv"
+            }
+        ]
+    }
+]

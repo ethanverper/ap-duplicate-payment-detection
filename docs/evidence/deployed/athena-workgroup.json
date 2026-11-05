@@ -1,0 +1,6 @@
+$ aws athena get-work-group --work-group ap-duplicate-payment-detection --query WorkGroup.Configuration.{scan_limit_bytes:BytesScannedCutoffPerQuery,enforced:EnforceWorkGroupConfiguration}
+# captured 2026-11-05T01:17:36Z
+{
+    "scan_limit_bytes": 1073741824,
+    "enforced": true
+}

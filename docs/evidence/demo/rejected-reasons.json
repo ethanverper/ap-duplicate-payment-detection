@@ -1,0 +1,12 @@
+$ bash -c for key in $(aws s3 ls s3://ap-duplicate-payment-detection-<account-id>/rejected/ap/ --recursive | awk '{print $4}' | grep reason.json); do aws s3 cp s3://ap-duplicate-payment-detection-<account-id>/$key -; done
+# captured 2026-11-05T01:26:47Z
+{
+  "source_key": "landing/ap/entity=MX01/MX01_ap_20261105.csv",
+  "issues": [
+    {
+      "code": "TRAILER_TOTAL_MISMATCH",
+      "message": "Trailer total 6794328.95 differs from the rows' sum 6795328.95",
+      "line": 52
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+$ terraform -chdir=infra/terraform state list
+# captured 2026-11-05T01:17:24Z
+data.archive_file.file_validator
+data.archive_file.glue_libs
+data.aws_caller_identity.current
+aws_athena_workgroup.analytics
+aws_cloudwatch_log_group.file_validator
+aws_glue_catalog_database.lake
+aws_glue_catalog_table.lake["curated_payments"]
+aws_glue_catalog_table.lake["gold_data_quality"]
+aws_glue_catalog_table.lake["gold_discounts_lost"]
+aws_glue_catalog_table.lake["gold_duplicate_suspects"]
+aws_glue_catalog_table.lake["gold_payment_performance"]
+aws_glue_catalog_table.lake["quarantine_payments"]
+aws_glue_job.daily_ap_kpis
+aws_glue_trigger.daily
+aws_iam_role.file_validator
+aws_iam_role.glue
+aws_iam_role_policy.file_validator
+aws_iam_role_policy.glue_lake
+aws_iam_role_policy_attachment.glue_service
+aws_lambda_function.file_validator
+aws_lambda_permission.s3_invokes_validator
+aws_s3_bucket.lake
+aws_s3_bucket_lifecycle_configuration.lake
+aws_s3_bucket_notification.landing
+aws_s3_bucket_policy.tls_only
+aws_s3_bucket_public_access_block.lake
+aws_s3_bucket_server_side_encryption_configuration.lake
+aws_s3_object.dq_ruleset
+aws_s3_object.glue_libs
+aws_s3_object.glue_script
+aws_sns_topic.alerts
+aws_sns_topic_subscription.email["0-AP Mexico"]
+aws_sns_topic_subscription.email["1-AP USA"]

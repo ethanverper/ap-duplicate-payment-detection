@@ -1,0 +1,3 @@
+$ aws glue get-tables --database-name ap_duplicate_payment_detection --query TableList[].Name --output text
+# captured 2026-11-05T01:17:35Z
+curated_payments	gold_data_quality	gold_discounts_lost	gold_duplicate_suspects	gold_payment_performance	quarantine_payments

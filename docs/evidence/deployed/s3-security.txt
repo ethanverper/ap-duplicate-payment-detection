@@ -1,0 +1,4 @@
+$ bash -c aws s3api get-public-access-block --bucket ap-duplicate-payment-detection-<account-id> --output text; aws s3api get-bucket-encryption --bucket ap-duplicate-payment-detection-<account-id> --query 'ServerSideEncryptionConfiguration.Rules[].ApplyServerSideEncryptionByDefault' --output text
+# captured 2026-11-05T01:17:38Z
+PUBLICACCESSBLOCKCONFIGURATION	True	True	True	True
+AES256

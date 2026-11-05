@@ -22,3 +22,6 @@ config/subscribers.yaml
 
 # Terraform packaging output
 infra/terraform/build/
+
+# Raw console screenshots (reviewed and redacted before anything is published)
+data/screenshots/

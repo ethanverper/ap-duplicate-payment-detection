@@ -1,0 +1,4 @@
+$ aws s3 ls s3://ap-duplicate-payment-detection-<account-id>/rejected/ap/ --recursive
+# captured 2026-11-05T01:26:44Z
+2026-11-04 19:25:38       5782 rejected/ap/entity=MX01/MX01_ap_20261105.csv
+2026-11-04 19:25:38        236 rejected/ap/entity=MX01/MX01_ap_20261105.csv.reason.json

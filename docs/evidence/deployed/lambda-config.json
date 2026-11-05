@@ -1,0 +1,15 @@
+$ aws lambda get-function-configuration --function-name ap-duplicate-payment-detection-file-validator --query {runtime:Runtime,memory_mb:MemorySize,timeout_s:Timeout,state:State,environment:Environment.Variables}
+# captured 2026-11-05T01:17:29Z
+{
+    "runtime": "python3.12",
+    "memory_mb": 256,
+    "timeout_s": 30,
+    "state": "Active",
+    "environment": {
+        "MAX_FILE_MB": "50",
+        "ALERT_TOPIC_ARN": "arn:aws:sns:us-east-1:<account-id>:ap-duplicate-payment-detection-alerts",
+        "VALIDATED_PREFIX": "validated/ap",
+        "KNOWN_ENTITIES": "MX01,US01",
+        "REJECTED_PREFIX": "rejected/ap"
+    }
+}

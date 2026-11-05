@@ -1,0 +1,10 @@
+$ aws glue get-job-runs --job-name ap-duplicate-payment-detection-daily-kpis --max-items 1 --query JobRuns[0].{state:JobRunState,started:StartedOn,seconds:ExecutionTime,workers:NumberOfWorkers,worker_type:WorkerType,error:ErrorMessage}
+# captured 2026-11-05T01:30:06Z
+{
+    "state": "SUCCEEDED",
+    "started": "2026-11-04T19:26:56.720000-06:00",
+    "seconds": 164,
+    "workers": 2,
+    "worker_type": "G.1X",
+    "error": null
+}

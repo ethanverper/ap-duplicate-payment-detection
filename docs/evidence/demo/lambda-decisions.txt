@@ -1,0 +1,5 @@
+$ aws logs filter-log-events --log-group-name /aws/lambda/ap-duplicate-payment-detection-file-validator --filter-pattern ?"File rejected" ?"Duplicate file ignored" --query events[].message --output text
+# captured 2026-11-05T01:26:50Z
+{"level": "WARNING", "logger": "src.lambdas.file_validator.handler", "message": "File rejected", "key": "landing/ap/entity=MX01/MX01_ap_20261105.csv", "target": "rejected/ap/entity=MX01/MX01_ap_20261105.csv", "issues": ["TRAILER_TOTAL_MISMATCH"], "message_id": "a6a1bbd8-65cc-50a1-b563-d8bdb89d1156"}
+	{"level": "INFO", "logger": "src.lambdas.file_validator.handler", "message": "Duplicate file ignored", "key": "landing/ap/entity=MX01/MX01_ap_20261105.csv", "sha256": "b7d92f86d5ad4d781c95c92ad3bf26fd9df129d2dd8b64968b1d42b49bbe2996"}
+
