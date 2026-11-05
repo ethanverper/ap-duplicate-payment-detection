@@ -10,8 +10,15 @@ Where it sits in the pipeline:
                                                              it is the answer key the tests grade the
                                                              pipeline against)
 
+    With --demo, the simulation runs up to the demo day (the last business day up to today), that
+    day is kept OUT of landing/, and its files are written for the live demo (src/generators/demo.py):
+
+        <out>/demo/valid/<ENTITY>_ap_<YYYYMMDD>.csv     the correct files
+        <out>/demo/corrupt/<ENTITY>_ap_<YYYYMMDD>.csv   a hand-edited copy (its trailer no longer matches)
+
 Usage:
     python -m src.generators.history --out data/generated
+    python -m src.generators.history --out data/generated --demo
 """
 
 from __future__ import annotations
@@ -25,7 +32,8 @@ from pathlib import Path
 from src.common.logging_utils import get_logger
 from src.common.settings import settings
 from src.generators import reference
-from src.generators.files import write_file
+from src.generators.demo import build_demo
+from src.generators.files import file_name, write_file
 from src.generators.simulator import SimulationResult, is_business_day, simulate
 
 logger = get_logger(__name__)
@@ -40,12 +48,20 @@ def default_last_day() -> date:
     return datetime.now(timezone.utc).date() - timedelta(days=1)
 
 
-def write_landing_files(result: SimulationResult, out_dir: Path) -> dict[str, int]:
+def last_business_day(day: date) -> date:
+    """The day itself if it is a business day, otherwise the Friday before."""
+    while not is_business_day(day):
+        day -= timedelta(days=1)
+    return day
+
+
+def write_landing_files(result: SimulationResult, out_dir: Path, until: date | None = None) -> dict[str, int]:
     """Write one file per entity per business day (empty days included).
 
     Args:
         result: The simulation output.
         out_dir: Root output folder.
+        until: Last day to write (default: the simulation's last day). The demo day is excluded this way.
 
     Returns:
         Number of files written per entity.
@@ -57,8 +73,8 @@ def write_landing_files(result: SimulationResult, out_dir: Path) -> dict[str, in
 
     # Every business day gets a file for every entity, even with no payments
     files = dict.fromkeys(reference.ENTITIES, 0)
-    day = result.first_day
-    while day <= result.last_day:
+    day, last = result.first_day, until or result.last_day
+    while day <= last:
         if is_business_day(day):
             for entity in reference.ENTITIES:
                 folder = out_dir / LANDING_PREFIX / f"entity={entity}"
@@ -101,14 +117,30 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--last-day", type=date.fromisoformat, default=None, help="last day (default yesterday)")
     parser.add_argument("--seed", type=int, default=_SIMULATION["seed"], help="random seed")
     parser.add_argument("--out", type=Path, default=Path("data/generated"), help="output folder")
+    parser.add_argument("--demo", action="store_true", help="add a demo day after the history (see module doc)")
     args = parser.parse_args(argv)
 
-    # Simulate the window
-    last_day = args.last_day or default_last_day()
-    result = simulate(last_day - timedelta(days=args.days - 1), last_day, args.seed)
+    # The window: with --demo it ends on the demo day, and the history is the days before it
+    if args.demo:
+        demo_day = last_business_day(args.last_day or datetime.now(timezone.utc).date())
+        last_day, history_until = demo_day, demo_day - timedelta(days=1)
+    else:
+        last_day = args.last_day or default_last_day()
+        history_until = last_day
+    result = simulate(history_until - timedelta(days=args.days - 1), last_day, args.seed)
 
-    # Write the ERP files, the master data and the answer key
-    files = write_landing_files(result, args.out)
+    # The demo day's files (and its injected duplicate, which joins the answer key)
+    if args.demo:
+        demo = build_demo(result, demo_day, args.seed)
+        result.planted.append(demo.injected)
+        for kind, contents in (("valid", demo.valid), ("corrupt", demo.corrupt)):
+            for entity, text in contents.items():
+                path = args.out / "demo" / kind / file_name(entity, demo_day)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(text, encoding="utf-8")
+
+    # Write the ERP files of the history, the master data and the answer key
+    files = write_landing_files(result, args.out, until=history_until)
     write_csv(args.out / "reference" / "suppliers" / "suppliers.csv", reference.suppliers_rows())
     write_csv(args.out / "reference" / "entities" / "entities.csv", reference.entities_rows())
     write_csv(args.out / "truth" / "planted_problems.csv", truth_rows(result))
