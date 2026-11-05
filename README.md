@@ -5,7 +5,7 @@ A file-driven AWS pipeline for accounts payable. It checks every ERP payment fil
 ![CI](https://github.com/ethanverper/ap-duplicate-payment-detection/actions/workflows/ci.yml/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue) ![Terraform](https://img.shields.io/badge/IaC-Terraform-7B42BC) ![AWS](https://img.shields.io/badge/AWS-S3%20events%20·%20Lambda%20·%20Glue%20Data%20Quality%20·%20Athena%20·%20SNS-FF9900)
 
-> 🚧 **Work in progress.** Built in small, reviewed levels; each level is a separate set of commits. Second project of the portfolio, after [manufacturing-scrap-and-stockout-alerts](https://github.com/ethanverper/manufacturing-scrap-and-stockout-alerts). It is the same company, now seen from finance.
+> ✅ **Deployed for real on AWS, then destroyed.** 30 resources ran for 29 minutes, with a live demo: a hand-edited file rejected in seconds, a re-sent file ignored, and the duplicates found and emailed. Second project of the portfolio, after [manufacturing-scrap-and-stockout-alerts](https://github.com/ethanverper/manufacturing-scrap-and-stockout-alerts): the same company, now seen from finance.
 
 ## Progress
 
@@ -16,7 +16,7 @@ A file-driven AWS pipeline for accounts payable. It checks every ERP payment fil
 | 2 | File validation Lambda: control trailer, header contract, row structure, entity/day consistency; re-sent files are idempotent; refused files are quarantined with reasons and AP is emailed | ✅ Done |
 | 3 | Duplicate detection with confidence tiers + payment KPIs (PySpark), **graded against the answer key: 26/26 found, 0 false alarms** | ✅ Done |
 | 4 | Terraform (30 resources): S3 event → Lambda, Glue job + **Glue Data Quality** (DQDL), duplicate emails by entity, 5 Athena queries with `ROLLUP` (tested on local Spark) | ✅ Done |
-| 5 | Real deploy with a live demo (rejected file, re-sent file, duplicate email), evidence, cost report, teardown | ⏳ Next: everything prepared and tested locally |
+| 5 | Real deploy with a live demo, evidence, two lessons from AWS, teardown verified ([deploy log](docs/evidence/deploy-log.md)). Actual cost pending (Cost Explorer lags ~24 h). | ✅ Done |
 
 ## 1. The business problem
 
@@ -81,7 +81,26 @@ The PySpark job is graded against the simulator's answer key, which the pipeline
 
 The Friday-only payment calendar of US01 loses ten times more discount money than MX01. Its two biggest losses are SUP-PRECISA ($227K) and SUP-ROBOTEC ($124K).
 
-## 5. Run it (so far)
+## 5. The real run on AWS
+
+| | |
+|---|---|
+| **History load** | 128 ERP files → 128 Lambda validations → **128 validated, 0 rejected, 0 errors** |
+| **Live demo** | Hand-edited file **rejected in seconds** (`TRAILER_TOTAL_MISMATCH`: exactly the $1,000 added) + email to AP Mexico · correct file validated · same file re-sent → ignored |
+| **Daily Glue job** | SUCCEEDED in 2 min 44 s · 6,337 rows reconciled · **Glue Data Quality 11/11 rules passed** |
+| **Detector on Athena** | **27 of 27 planted problems found, 0 false alarms**, $195,416 at risk (graded against the answer key) |
+| **Teardown** | `30 destroyed`, empty state, `make leftovers` → ✅ Nothing billable left |
+| **Evidence** | [deploy log](docs/evidence/deploy-log.md) · [CLI output per phase](docs/evidence/) · [14 console screenshots](docs/images/console/) · [Athena results](docs/images/results/) |
+
+| A hand-edited file, rejected in seconds | Glue Data Quality: 11/11 rules | 10 concurrent Lambdas, 259 throttles, 0 lost |
+|---|---|---|
+| ![Rejected file email](docs/images/console/email-file-rejected.png) | ![Data Quality](docs/images/console/console-glue-data-quality-rules.png) | ![Lambda throttles](docs/images/console/console-lambda-monitor-throttles.png) |
+
+**What AWS taught us** ([lessons 2 and 3](docs/lessons-learned.md)):
+- **The account allows only 10 concurrent Lambdas.** Loading 128 files caused 259 throttles and **lost nothing**, because S3 invokes Lambda asynchronously and throttled events are retried automatically. A synchronous caller would have received errors.
+- **One alert email never arrived.** SNS reported no failure, and a re-publish of the same content arrived. Email is a notification, not a record: the duplicate was always in the Athena review list, the source of truth. In production, a durable SQS subscriber would back the email.
+
+## 6. Run it
 
 Setup and every configuration value: [docs/configuration.md](docs/configuration.md)
 
@@ -92,7 +111,15 @@ make kpis-local             # the Glue job (duplicates + KPIs) with a local Spar
 make grade                  # precision and recall against the answer key
 ```
 
-## Repository layout (so far)
+**On AWS, from scratch** (the real run took 29 minutes; nothing bills by the hour; everything is deleted at the end):
+1. An AWS account with MFA on the root user and a budget alert; a working identity (`aws sts get-caller-identity`); AWS CLI v2, Terraform ≥ 1.6, Python ≥ 3.10, Java 17.
+2. `cp config/subscribers.example.yaml config/subscribers.yaml` and put in the emails that should receive the AP alerts.
+3. `make generate-demo` → `make deploy` (confirm the subscription emails) → `make upload-reference` → `make upload-history` → `make demo` → `make kpis` → `make queries`.
+4. Tear down: `make destroy` → `make clean-glue-logs` → `make leftovers` (it must print `✅ Nothing billable left.`).
+
+The step-by-step record of a real run: [docs/evidence/deploy-log.md](docs/evidence/deploy-log.md).
+
+## Repository layout
 
 ```
 config/            settings.yaml (every tunable value) · master_data.yaml (entities, suppliers, terms) · subscribers.example.yaml
