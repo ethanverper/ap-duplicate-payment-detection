@@ -2,7 +2,7 @@ PROJECT ?= ap-duplicate-payment-detection  # same as config/settings.yaml -> pro
 TF := terraform -chdir=infra/terraform
 PYTHON ?= python3
 
-.PHONY: help install test lint fmt generate generate-demo kpis-local grade deploy upload-reference upload-history demo kpis queries evidence destroy clean-glue-logs leftovers cost cost-daily
+.PHONY: help install test lint fmt generate generate-demo kpis-local grade deploy upload-reference upload-history demo kpis queries charts evidence destroy clean-glue-logs leftovers cost cost-daily
 
 help: ## List targets
 	@grep -E '^[a-z-]+:.*##' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-16s %s\n", $$1, $$2}'
@@ -53,6 +53,9 @@ kpis: ## Start the Glue job on AWS (~2 DPU x 3 min, about $0.05 a run); prints t
 queries: ## Run every sql/ query on Athena and save the results as CSV in docs/images/results (after kpis)
 	$(PYTHON) -m scripts.run_queries --out docs/images/results \
 		--workgroup $$($(TF) output -raw athena_workgroup) --database $$($(TF) output -raw athena_database)
+
+charts: ## Draw the README charts from the saved Athena results (docs/images/results → docs/images; no AWS)
+	$(PYTHON) -m scripts.make_charts --results docs/images/results --out docs/images
 
 evidence: ## Save redacted proof of the deploy: make evidence PHASE=deployed|loaded|demo|batch|destroyed
 	scripts/evidence.sh $(PHASE)
