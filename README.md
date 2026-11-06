@@ -44,7 +44,41 @@ These errors are usually found months later, by an audit or a recovery firm. Sep
 | **DPO** | Amount-weighted days from invoice to payment | Entity → Supplier category → Supplier | Report vs terms | Daily |
 | **Early-payment discounts lost ($)** | Discount % × amount, for discount-term invoices paid after the window | Entity → Supplier category → Supplier → Invoice | Monthly total to Treasury | Daily |
 
-## 3. The data (level 1)
+## 3. Architecture and data lineage
+
+```mermaid
+flowchart LR
+    ERP[ERP daily export<br/>CSV + control trailer] -->|S3 PUT| LAND[(landing/ap/<br/>as received)]
+    LAND -->|S3 event| L[Lambda<br/>file_validator]
+    L -->|valid| VAL[(validated/ap/<br/>entity= · dt=)]
+    L -->|invalid + reasons| REJ[(rejected/ap/)]
+    L -->|FILE_REJECTED| SNS[[SNS<br/>filtered by kind + entity]]
+    VAL --> G[Glue PySpark<br/>daily_ap_kpis<br/>+ Data Quality]
+    REF[(reference/)] --> G
+    G --> CUR[(curated/payments)]
+    G --> QUA[(quarantine/payments)]
+    G --> GOLD[(gold/: duplicate_suspects ·<br/>payment_performance · discounts_lost ·<br/>data_quality)]
+    G -->|DUPLICATE_PAYMENT, HIGH only| SNS
+    GOLD --> CAT[Glue Data Catalog] --> ATH[Athena<br/>sql/ ROLLUP] --> AP((AP analysts))
+    SNS -->|email| AP
+```
+
+Every number can be traced back to the exact ERP file and line it came from:
+
+`landing/` (bytes as received) → `validated/` (same bytes + SHA-256) → `curated/` (one row per real payment) → `gold/` (one table per KPI) → Athena.
+
+| Service | Role | Why this one and not the alternative |
+|---|---|---|
+| **S3 event → Lambda** | Checks every file in seconds as it lands | A daily file needs no stream (no Kinesis, nothing billed by the hour), and Glue takes ~1–2 min just to start |
+| **Glue (PySpark)** | Row rules, duplicate detection, KPIs over all 90 days | Joins and windows over every payment; serverless Spark, paid per minute |
+| **Glue Data Quality** | A versioned DQDL ruleset on the curated table | Declared, tested rules with results in the console, instead of ad-hoc checks |
+| **Glue Data Catalog + Athena** | The analysts' SQL access to `gold/` | No database server running; $5 per TB scanned, capped at 1 GB per query |
+| **SNS** | Rejected-file and duplicate-payment emails, filtered per person | One topic, filter policies by `kind` and `entity` |
+| **Terraform** | All 30 resources from `config/settings.yaml` | Reproducible, and destroyed with one command |
+
+Full diagrams (data lineage, one file step by step), components, storage layout and security: **[docs/architecture.md](docs/architecture.md)** · design decisions: [docs/decisions.md](docs/decisions.md)
+
+## 4. The data
 
 The simulated ERP exports one CSV per entity per business day. **Its last line is a control trailer** with the record count and the total paid, the way bank and ERP files prove they arrived complete. 90 days, 2 entities, 6,322 payments, about $60M paid. Planted in it, with an answer key the pipeline will be graded against:
 
@@ -60,30 +94,39 @@ There are also traps the detector must **not** fall into:
 - monthly subscriptions that bill the same amount every month;
 - dozens of legitimate advance + final payments.
 
-## 4. What the detector finds (level 3, local run)
+## 5. What the data shows (real run on AWS)
 
-The PySpark job is graded against the simulator's answer key, which the pipeline never sees (`make grade`):
+All numbers below come from Athena on the real deploy (`docs/images/results/`). The charts are drawn from those results by `scripts/make_charts.py`.
+
+![Duplicates at risk](docs/images/duplicates_at_risk.png)
 
 | Planted problem | Planted | Found | Rule | Confidence | $ at risk |
 |---|---|---|---|---|---|
-| Same invoice, number retyped | 12 | **12** | `SAME_INVOICE_RETYPED_NUMBER` | HIGH | $115,207 |
-| Advance, then the full amount | 6 | **6** | `ADVANCE_THEN_FULL_AMOUNT` | HIGH | $21,354 |
-| Resubmitted under a new number | 8 | **8** | `RESUBMITTED_UNDER_NEW_NUMBER` | MEDIUM | $22,514 |
-| **Total** | **26** | **26** | | | **$159,075** |
+| Same invoice, number retyped (incl. the live demo's) | 13 | **13** | `SAME_INVOICE_RETYPED_NUMBER` | HIGH | $137,355 |
+| Advance, then the full amount | 6 | **6** | `ADVANCE_THEN_FULL_AMOUNT` | HIGH | $35,058 |
+| Resubmitted under a new number | 8 | **8** | `RESUBMITTED_UNDER_NEW_NUMBER` | MEDIUM | $23,004 |
+| **Total** | **27** | **27** | | | **$195,416** |
 
-**Precision 100%, recall 100%.** The legitimate look-alikes raise no alarm: dozens of advance + final payments, and the monthly subscriptions. One rule, "total paid > invoice amount" on a normalized invoice number, catches both HIGH problems and can never flag a legitimate advance (ADR-005).
+**Precision 100%, recall 100%**, graded against an answer key the pipeline never sees. The legitimate look-alikes raise no alarm: dozens of advance + final payments, and monthly subscriptions. One rule, "total paid > invoice amount" on a normalized invoice number, catches both HIGH problems and can never flag a legitimate advance (ADR-005).
 
 **Lesson learned:** a test widening the resubmission window to 31 days raised two kinds of false alarm: the subscriptions, and **two different freight invoices of exactly $4,700.22**, a chance match. Same-amount matching stays MEDIUM confidence with a 7-day window ([lesson 1](docs/lessons-learned.md), ADR-006).
 
-| Payment KPI | MX01 | US01 |
+![On-time payment by supplier](docs/images/on_time_by_supplier.png)
+
+![Discounts lost](docs/images/discounts_lost.png)
+
+| Payment KPI (90 days, $58.5M paid) | MX01 | US01 |
 |---|---|---|
-| On-time payment % | 84.9% (SUP-ANDINA: **0%**) | 91.7% |
-| DPO (amount-weighted days) | 20.8 | 30.3 |
-| Early-payment discounts lost | $34,854 (83 invoices) | **$368,848** (1,043 invoices) |
+| On-time payment % | 85.0% (SUP-ANDINA: **0%**) | 92.1% |
+| DPO (amount-weighted days) | 20.7 | 30.0 |
+| Early-payment discounts lost | $36,226 (94 invoices) | **$361,287** (1,041 invoices) |
 
-The Friday-only payment calendar of US01 loses ten times more discount money than MX01. Its two biggest losses are SUP-PRECISA ($227K) and SUP-ROBOTEC ($124K).
+**What each team would do:**
+- **AP:** recover the 19 proven overpayments ($172K), review the 8 resubmissions ($23K), and fix manual invoice entry (13 retyped numbers).
+- **Procurement:** talk to SUP-ANDINA, which has never been paid on time.
+- **Treasury:** add a mid-week payment run in US01. Paying on Fridays only throws away $361K of discounts in 90 days, ten times MX01's loss, mostly with SUP-PRECISA and SUP-ROBOTEC.
 
-## 5. The real run on AWS
+## 6. The real run on AWS
 
 | | |
 |---|---|
@@ -102,7 +145,7 @@ The Friday-only payment calendar of US01 loses ten times more discount money tha
 - **The account allows only 10 concurrent Lambdas.** Loading 128 files caused 259 throttles and **lost nothing**, because S3 invokes Lambda asynchronously and throttled events are retried automatically. A synchronous caller would have received errors.
 - **One alert email never arrived.** SNS reported no failure, and a re-publish of the same content arrived. Email is a notification, not a record: the duplicate was always in the Athena review list, the source of truth. In production, a durable SQS subscriber would back the email.
 
-## 6. Run it
+## 7. Run it
 
 Setup and every configuration value: [docs/configuration.md](docs/configuration.md)
 
@@ -128,14 +171,14 @@ config/            settings.yaml (every tunable value) · master_data.yaml (enti
 dq/                curated_payments.dqdl (Glue Data Quality ruleset)
 infra/terraform/   one numbered file per stage: ingestion, batch, alerts, analytics
 sql/               one query per business question (ROLLUP), runs on Athena and Spark
-docs/              spec, KPI dictionary, design decisions, lessons learned, configuration, coding standards
+docs/              spec, architecture, KPI dictionary, design decisions, lessons learned, configuration, coding standards
 src/
   common/          the file contract (schema), settings, config, logging, AWS clients
   generators/      reference (master data, payment terms) · story (planted problems) · simulator · files · history
   lambdas/         file_validator: validation (pure checks) · storage (S3 zones) · notifier (SNS) · handler
   glue_jobs/       daily_ap_kpis (extract → transform → reconcile → quality → load → alert) · transforms (pure PySpark) · data_quality · alerts
   evaluation/      grading: the detector against the answer key
-scripts/           kpis_local · grade_detection · demo · run_queries · evidence · leftovers · clean_glue_logs · cost
+scripts/           kpis_local · grade_detection · demo · run_queries · make_charts · evidence · leftovers · clean_glue_logs · cost
   (src/analytics/ runs the sql/ queries on Athena)
 tests/             unit tests, moto-backed tests of the Lambda, and local-Spark tests of the Glue job
 ```
