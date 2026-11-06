@@ -74,7 +74,7 @@ flowchart TB
     G2["gold/payment_performance<br/><i>KPIs 2–3: on-time counts, DPO inputs</i>"]
     G3["gold/discounts_lost<br/><i>KPI 4: one row per invoice that lost its discount</i>"]
     G4["gold/data_quality<br/><i>file rows = curated + duplicate rows + quarantined, per day</i>"]
-    S["sql/01…05 on Athena<br/><i>ROLLUP Entity → Category → Supplier; the review list</i>"]
+    S["sql/01…05 on Athena<br/><i>ROLLUP Entity → Category → Supplier · the review list</i>"]
 
     A -->|"Lambda: integrity checks (validation.py)"| B
     A -->|"Lambda: integrity checks"| R
@@ -111,7 +111,7 @@ sequenceDiagram
     participant P as AP analysts
 
     ERP->>S3: PUT MX01_ap_20261105.csv
-    S3-->>L: event (async; throttled events wait and retry)
+    S3-->>L: event (async: throttled events wait and retry)
     L->>L: key → entity + day · header = contract · every row complete · trailer count and total
     alt same entity and day already validated, same SHA-256
         L-->>L: DUPLICATE: ignore (a retry), no email
