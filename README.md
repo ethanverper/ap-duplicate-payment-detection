@@ -46,6 +46,10 @@ These errors are usually found months later, by an audit or a recovery firm. Sep
 
 ## 3. Architecture and data lineage
 
+![AWS architecture diagram drawn with the official AWS icons](docs/images/architecture-aws.png)
+
+<sub>Drawn in Lucidchart with the official AWS 2024 icon set. The Mermaid version below is the same flow as text, kept next to the code so it changes with it.</sub>
+
 ```mermaid
 flowchart LR
     ERP[ERP daily export<br/>CSV + control trailer] -->|S3 PUT| LAND[(landing/ap/<br/>as received)]
